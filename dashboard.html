@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentMarket Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #080b0f;
+  --bg2:     #0e1318;
+  --bg3:     #141a21;
+  --border:  #1e2832;
+  --green:   #0dff8c;
+  --blue:    #3d9eff;
+  --amber:   #ffaa00;
+  --red:     #ff4455;
+  --purple:  #a855f7;
+  --dim:     #3a4a5a;
+  --text:    #8aa0b8;
+  --white:   #dde8f0;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px; height: 100vh; overflow: hidden; }
+
+/* Grid */
+.app {
+  display: grid;
+  grid-template-rows: 52px 1fr 200px;
+  grid-template-columns: 260px 1fr 280px;
+  height: 100vh;
+  gap: 0;
+}
+
+/* Header */
+header {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+
+.logo { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+.logo em { color: var(--green); font-style: normal; }
+.logo span { color: var(--white); }
+
+.header-right { display: flex; align-items: center; gap: 24px; }
+
+.pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--dim);
+}
+.pill.live { border-color: var(--green); color: var(--green); }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1.5s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+.hstat { font-size: 11px; color: var(--dim); }
+.hstat strong { color: var(--amber); font-size: 16px; font-weight: 500; }
+
+/* Left — Agent nodes */
+.agents-panel {
+  grid-row: 2 / 3;
+  border-right: 1px solid var(--border);
+  overflow-y: auto; overflow-x: hidden;
+}
+
+.panel-label {
+  padding: 10px 16px;
+  font-size: 9px; text-transform: uppercase; letter-spacing: 2.5px; color: var(--dim);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  position: sticky; top: 0; z-index: 1;
+}
+
+.agent-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+  cursor: default;
+}
+.agent-card:hover { background: var(--bg3); }
+.agent-card.active { border-left: 2px solid var(--green); background: var(--bg3); }
+.agent-card.active .agent-name { color: var(--green); }
+
+.agent-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.agent-name { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--white); }
+.agent-role { font-size: 9px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--dim); margin-bottom: 8px; }
+.agent-balance { font-size: 15px; font-weight: 500; }
+.agent-balance.positive { color: var(--green); }
+.agent-balance.negative { color: var(--red); }
+.agent-wallet { font-size: 9px; color: var(--dim); }
+
+.agent-bar-track { height: 2px; background: var(--border); margin-top: 8px; }
+.agent-bar-fill { height: 100%; background: var(--green); transition: width 0.5s ease; }
+
+/* Center — Flow + feed */
+.center-panel {
+  grid-row: 2 / 3;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.flow-viz {
+  flex: 0 0 160px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  display: flex; align-items: center; justify-content: center;
+  gap: 0;
+  padding: 0 20px;
+  position: relative; overflow: hidden;
+}
+
+/* Flow nodes */
+.flow-nodes {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; width: 100%;
+}
+
+.fnode {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  position: relative;
+}
+
+.fnode-circle {
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  background: var(--bg);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.fnode-circle.lit {
+  border-color: var(--green);
+  box-shadow: 0 0 16px rgba(13,255,140,0.3), inset 0 0 12px rgba(13,255,140,0.08);
+}
+.fnode-circle.amber-lit { border-color: var(--amber); box-shadow: 0 0 16px rgba(255,170,0,0.3); }
+.fnode-circle.blue-lit  { border-color: var(--blue);  box-shadow: 0 0 16px rgba(61,158,255,0.3); }
+.fnode-circle.purple-lit{ border-color: var(--purple);box-shadow: 0 0 16px rgba(168,85,247,0.3); }
+
+.fnode-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); text-align: center; max-width: 70px; }
+
+.fnode-spend {
+  font-size: 10px; color: var(--amber);
+  position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap;
+  opacity: 0; transition: opacity 0.3s;
+}
+.fnode-spend.show { opacity: 1; }
+
+/* Arrows between nodes */
+.farrow {
+  flex: 1; position: relative; height: 2px;
+  margin: 0 -2px;
+  min-width: 30px;
+}
+.farrow-line {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.farrow-pulse {
+  position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  animation: none;
+}
+.farrow.active .farrow-pulse { animation: flowPulse 0.8s ease forwards; }
+@keyframes flowPulse { from{left:-100%} to{left:100%} }
+
+/* Event feed */
+.feed-area { flex: 1; overflow-y: auto; }
+.feed-area::-webkit-scrollbar { width: 2px; }
+.feed-area::-webkit-scrollbar-thumb { background: var(--border); }
+
+.feed-row {
+  display: grid; grid-template-columns: 62px 96px 1fr 100px;
+  align-items: center; gap: 12px;
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+  animation: rowIn 0.25s ease;
+}
+@keyframes rowIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+.feed-row:hover { background: var(--bg3); }
+
+.feed-row.payment_verified  { border-left: 2px solid var(--green); }
+.feed-row.payment_required  { border-left: 2px solid var(--amber); }
+.feed-row.agent_working     { border-left: 2px solid var(--blue); }
+.feed-row.transaction       { border-left: 2px solid var(--purple); }
+
+.ft { font-size: 10px; color: var(--dim); }
+.ftag {
+  font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+  padding: 2px 5px; border: 1px solid; display: inline-block;
+}
+.ftag.payment_verified  { color: var(--green);  border-color: var(--green); }
+.ftag.payment_required  { color: var(--amber);  border-color: var(--amber); }
+.ftag.agent_working     { color: var(--blue);   border-color: var(--blue); }
+.ftag.transaction       { color: var(--purple); border-color: var(--purple); }
+.fdesc { font-size: 11px; color: var(--white); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.famt  { font-size: 13px; font-weight: 500; text-align: right; }
+.famt.green  { color: var(--green); }
+.famt.amber  { color: var(--amber); }
+.famt.purple { color: var(--purple); }
+
+.empty-feed {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 10px; color: var(--dim);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+}
+
+/* Right — Stats */
+.stats-panel {
+  grid-row: 2 / 3;
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.stat-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid var(--border);
+}
+.sbox {
+  padding: 14px 16px; border-right: 1px solid var(--border);
+}
+.sbox:last-child { border-right: none; }
+.sbox-label { font-size: 9px; text-transform: uppercase; letter-spacing: 2px; color: var(--dim); margin-bottom: 4px; }
+.sbox-val { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--white); line-height: 1; }
+.sbox-val.green  { color: var(--green); }
+.sbox-val.amber  { color: var(--amber); }
+.sbox-val.blue   { color: var(--blue); }
+.sbox-val.purple { color: var(--purple); }
+
+.txn-log { flex: 1; overflow-y: auto; }
+.txn-log::-webkit-scrollbar { width: 2px; }
+.txn-log::-webkit-scrollbar-thumb { background: var(--border); }
+
+.txn-item {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  animation: rowIn 0.2s ease;
+}
+.txn-from-to { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.txn-from { font-size: 10px; color: var(--red); }
+.txn-arrow-icon { color: var(--dim); }
+.txn-to   { font-size: 10px; color: var(--green); }
+.txn-service { font-size: 9px; color: var(--dim); text-transform: uppercase; }
+.txn-amt { float: right; font-size: 12px; color: var(--purple); font-weight: 500; }
+
+/* Bottom — Query */
+.query-bar {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; gap: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 0;
+}
+
+.query-prefix {
+  padding: 0 16px; font-size: 11px; color: var(--green);
+  border-right: 1px solid var(--border); height: 100%;
+  display: flex; align-items: center;
+  white-space: nowrap;
+}
+
+#qInput {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--white); font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 0 16px; height: 100%; caret-color: var(--green);
+}
+#qInput::placeholder { color: var(--dim); }
+
+.run-btn {
+  background: var(--green); color: var(--bg); border: none;
+  font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 2px;
+  padding: 0 28px; height: 100%; cursor: pointer;
+  transition: background 0.15s;
+}
+.run-btn:hover { background: #08cc6e; }
+.run-btn:disabled { background: var(--dim); cursor: not-allowed; color: var(--bg2); }
+
+/* Grain overlay */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 9999; opacity: 0.6;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo"><em>Agent</em><span>Market</span> <span style="font-size:13px;color:var(--dim);font-family:'DM Mono'">PRO</span></div>
+    <div class="header-right">
+      <div class="pill live"><div class="dot"></div> <span id="connLabel">Connecting</span></div>
+      <div class="hstat">Economy spend&nbsp;&nbsp;<strong id="hSpend">0.0000</strong>&nbsp;USDC</div>
+      <div class="hstat" style="color:var(--blue)">Stellar Testnet</div>
+    </div>
+  </header>
+
+  <!-- Left: Agent nodes -->
+  <div class="agents-panel">
+    <div class="panel-label">Agent Economy</div>
+    <div id="agentList"></div>
+  </div>
+
+  <!-- Center: Flow viz + feed -->
+  <div class="center-panel">
+
+    <!-- Flow visualization -->
+    <div class="flow-viz">
+      <div class="flow-nodes">
+        <div class="fnode" id="fn-user">
+          <div class="fnode-circle" id="fc-user">🧑</div>
+          <div class="fnode-label">User</div>
+        </div>
+        <div class="farrow" id="fa-0"><div class="farrow-line"><div class="farrow-pulse"></div></div></div>
+        <div class="fnode" id="fn-orc">
+          <div class="fnode-spend" id="fs-orc"></div>
+          <div class="fnode-circle" id="fc-orc">🤖</div>
+          <div class="fnode-label">Orchestrator</div>
+        </div>
+        <div class="farrow" id="fa-1"><div class="farrow-line"><div class="farrow-pulse"></div></div></div>
+        <div class="fnode" id="fn-research">
+          <div class="fnode-spend" id="fs-research"></div>
+          <div class="fnode-circle" id="fc-research">🔬</div>
+          <div class="fnode-label">Research Agent</div>
+        </div>
+        <div class="farrow" id="fa-2"><div class="farrow-line"><div class="farrow-pulse"></div></div></div>
+        <div class="fnode" id="fn-writing">
+          <div class="fnode-spend" id="fs-writing"></div>
+          <div class="fnode-circle" id="fc-writing">✍️</div>
+          <div class="fnode-label">Writing Agent</div>
+        </div>
+        <div class="farrow" id="fa-3"><div class="farrow-line"><div class="farrow-pulse"></div></div></div>
+        <div class="fnode" id="fn-data">
+          <div class="fnode-spend" id="fs-data"></div>
+          <div class="fnode-circle" id="fc-data">📊</div>
+          <div class="fnode-label">Data APIs</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event feed -->
+    <div class="panel-label">Live Event Feed</div>
+    <div class="feed-area" id="feedArea">
+      <div class="empty-feed" id="emptyFeed">
+        <span style="font-size:24px;opacity:.3">⬡</span>
+        <span>Awaiting agent activity</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Stats + txn log -->
+  <div class="stats-panel">
+    <div class="panel-label">Session Stats</div>
+    <div class="stat-row">
+      <div class="sbox"><div class="sbox-label">Total Spent</div><div class="sbox-val green" id="s-spent">0.0000</div></div>
+      <div class="sbox"><div class="sbox-label">Transactions</div><div class="sbox-val purple" id="s-txns">0</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="sbox"><div class="sbox-label">Verified</div><div class="sbox-val green" id="s-verified">0</div></div>
+      <div class="sbox"><div class="sbox-label">Agents Active</div><div class="sbox-val blue" id="s-active">0</div></div>
+    </div>
+    <div class="panel-label">Agent-to-Agent Transactions</div>
+    <div class="txn-log" id="txnLog">
+      <div style="padding:20px;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1px">No transactions yet</div>
+    </div>
+  </div>
+
+  <!-- Bottom: Query bar -->
+  <div class="query-bar">
+    <div class="query-prefix">$ agent query ›</div>
+    <input id="qInput" placeholder='e.g. "Compare NVDA vs AMD and write a report"' />
+    <button class="run-btn" id="runBtn" onclick="sendQuery()">Execute</button>
+  </div>
+
+</div>
+
+<script>
+const WS = 'ws://localhost:3001';
+const API = 'http://localhost:3001';
+
+let ws, totalSpent = 0, txnCount = 0, verifiedCount = 0;
+const activeAgents = new Set();
+
+const agentDefs = [
+  { id: 'orchestrator', label: 'Orchestrator',    emoji: '🤖', color: 'var(--green)',  role: 'Coordinates the economy' },
+  { id: 'research',     label: 'Research Agent',  emoji: '🔬', color: 'var(--blue)',   role: 'Gathers financial data' },
+  { id: 'writing',      label: 'Writing Agent',   emoji: '✍️', color: 'var(--amber)',  role: 'Polishes reports' },
+  { id: 'code',         label: 'Code Agent',      emoji: '💻', color: 'var(--purple)', role: 'Generates analysis code' },
+  { id: 'server',       label: 'Data Server',     emoji: '📊', color: 'var(--text)',   role: 'x402 data APIs' },
+];
+
+const agentBalances = {};
+
+// ── Render agent list ─────────────────────────────────────────────────────────
+function renderAgents() {
+  const el = document.getElementById('agentList');
+  el.innerHTML = agentDefs.map(a => {
+    const bal = agentBalances[a.id] || 0;
+    const isActive = activeAgents.has(a.id);
+    const sign = bal >= 0 ? '+' : '';
+    return `
+    <div class="agent-card ${isActive ? 'active' : ''}" id="ac-${a.id}">
+      <div class="agent-row">
+        <span class="agent-name">${a.emoji} ${a.label}</span>
+        <span class="agent-balance ${bal >= 0 ? 'positive' : 'negative'}">${sign}${bal.toFixed(4)}</span>
+      </div>
+      <div class="agent-role">${a.role}</div>
+      <div class="agent-bar-track"><div class="agent-bar-fill" style="width:${Math.min(Math.abs(bal)*200,100)}%;background:${a.color}"></div></div>
+    </div>`;
+  }).join('');
+}
+renderAgents();
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+  ws = new WebSocket(WS);
+  ws.onopen = () => {
+    document.getElementById('connLabel').textContent = 'Live';
+    document.querySelector('.pill').classList.add('live');
+  };
+  ws.onmessage = e => handle(JSON.parse(e.data));
+  ws.onclose = () => { document.getElementById('connLabel').textContent = 'Reconnecting'; setTimeout(connect, 3000); };
+}
+
+function handle(ev) {
+  const empty = document.getElementById('emptyFeed');
+  if (empty) empty.remove();
+
+  if (ev.type === 'payment_verified') {
+    totalSpent += ev.price || 0;
+    verifiedCount++;
+    document.getElementById('s-spent').textContent = totalSpent.toFixed(4);
+    document.getElementById('s-verified').textContent = verifiedCount;
+    document.getElementById('hSpend').textContent = totalSpent.toFixed(4);
+    pulseArrow(ev.service);
+    lightNode(ev.agent || ev.service);
+  }
+
+  if (ev.type === 'transaction') {
+    txnCount++;
+    document.getElementById('s-txns').textContent = txnCount;
+    agentBalances[ev.from] = (agentBalances[ev.from] || 0) - ev.amount;
+    agentBalances[ev.to]   = (agentBalances[ev.to]   || 0) + ev.amount;
+    addTxn(ev);
+    renderAgents();
+  }
+
+  if (ev.type === 'agent_working') {
+    activeAgents.add(ev.agent);
+    document.getElementById('s-active').textContent = activeAgents.size;
+    setTimeout(() => { activeAgents.delete(ev.agent); document.getElementById('s-active').textContent = activeAgents.size; renderAgents(); }, 3000);
+    renderAgents();
+  }
+
+  addFeedRow(ev);
+}
+
+// ── Feed row ──────────────────────────────────────────────────────────────────
+const tagMap = { payment_verified:'payment_verified', payment_required:'payment_required', agent_working:'agent_working', transaction:'transaction', query_received:'agent_working', orchestrator_thinking:'agent_working' };
+const amtClass = { payment_verified:'green', payment_required:'amber', transaction:'purple' };
+
+function addFeedRow(ev) {
+  const area = document.getElementById('feedArea');
+  const row = document.createElement('div');
+  const tag = tagMap[ev.type] || 'agent_working';
+  row.className = `feed-row ${tag}`;
+  const amt = ev.price ? `${ev.price.toFixed(4)} USDC` : ev.amount ? `${ev.amount.toFixed(4)} USDC` : '—';
+  const desc = ev.service || ev.agent || ev.query || ev.task || ev.message || ev.type;
+  const t = new Date(ev.ts || Date.now()).toTimeString().slice(0,8);
+  row.innerHTML = `
+    <span class="ft">${t}</span>
+    <span class="ftag ${tag}">${ev.type.replace(/_/g,' ')}</span>
+    <span class="fdesc">${desc}</span>
+    <span class="famt ${amtClass[ev.type]||'green'}">${amt}</span>
+  `;
+  area.prepend(row);
+}
+
+// ── Txn log ───────────────────────────────────────────────────────────────────
+function addTxn(ev) {
+  const log = document.getElementById('txnLog');
+  if (log.querySelector('div[style]')) log.innerHTML = '';
+  const item = document.createElement('div');
+  item.className = 'txn-item';
+  item.innerHTML = `
+    <div class="txn-from-to">
+      <span class="txn-from">${ev.from}</span>
+      <span class="txn-arrow-icon">→</span>
+      <span class="txn-to">${ev.to}</span>
+      <span class="txn-amt">${ev.amount.toFixed(4)}</span>
+    </div>
+    <div class="txn-service">${ev.service}</div>
+  `;
+  log.prepend(item);
+}
+
+// ── Flow viz animations ───────────────────────────────────────────────────────
+function pulseArrow(service) {
+  const map = { 'research-agent':1, 'writing-agent':2, 'stock-data':3, 'news-feed':3, 'macro-data':3, 'code-agent':1 };
+  const idx = map[service] ?? 0;
+  const arrow = document.getElementById(`fa-${idx}`);
+  if (!arrow) return;
+  arrow.classList.remove('active');
+  void arrow.offsetWidth;
+  arrow.classList.add('active');
+  setTimeout(() => arrow.classList.remove('active'), 900);
+}
+
+function lightNode(agentOrService) {
+  const map = { 'orchestrator':'orc', 'research':'research', 'research-agent':'research', 'writing':'writing', 'writing-agent':'writing', 'code':'code', 'stock-data':'data', 'news-feed':'data', 'macro-data':'data' };
+  const key = map[agentOrService];
+  if (!key) return;
+  const circle = document.getElementById(`fc-${key}`);
+  if (!circle) return;
+  circle.classList.add('lit');
+  setTimeout(() => circle.classList.remove('lit'), 1500);
+}
+
+// ── Query ─────────────────────────────────────────────────────────────────────
+async function sendQuery() {
+  const input = document.getElementById('qInput');
+  const btn = document.getElementById('runBtn');
+  const q = input.value.trim();
+  if (!q) return;
+
+  btn.disabled = true; btn.textContent = 'Running…';
+  lightNode('orchestrator');
+
+  try {
+    await fetch(`${API}/run`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q }),
+    });
+  } catch(_) {}
+
+  input.value = '';
+  setTimeout(() => { btn.disabled = false; btn.textContent = 'Execute'; }, 3000);
+}
+
+document.getElementById('qInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendQuery(); });
+
+// ── Load initial state ────────────────────────────────────────────────────────
+fetch(`${API}/economy`).then(r => r.json()).then(data => {
+  if (data.transactions) data.transactions.reverse().forEach(handle);
+}).catch(() => {});
+
+connect();
+</script>
+</body>
+</html>

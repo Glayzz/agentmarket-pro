@@ -1,0 +1,32 @@
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/api/*"
+  to   = "https://YOUR-APP.railway.app/api/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/data/*"
+  to   = "https://YOUR-APP.railway.app/data/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/agent/*"
+  to   = "https://YOUR-APP.railway.app/agent/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/run"
+  to   = "https://YOUR-APP.railway.app/run"
+  status = 200
+
+[[redirects]]
+  from = "/economy"
+  to   = "https://YOUR-APP.railway.app/economy"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
