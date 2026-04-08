@@ -11,7 +11,7 @@ const NETWORK_PASSPHRASE = process.env.STELLAR_NETWORK === 'mainnet'
   ? StellarSdk.Networks.PUBLIC
   : StellarSdk.Networks.TESTNET;
 
-const USDC_ISSUER = process.env.USDC_ISSUER || 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFL5A5';
+const USDC_ISSUER = process.env.USDC_ISSUER;
 const USDC = new StellarSdk.Asset('USDC', USDC_ISSUER);
 const horizon = new StellarSdk.Horizon.Server(HORIZON_URL);
 
