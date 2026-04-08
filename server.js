@@ -192,10 +192,13 @@ app.post('/run', async (req, res) => {
   }, 500);
 });
 
+// ── Health check (required for Railway) ──────────────────────────────────────
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════╗
 ║         AgentMarket Pro — Economy Server          ║
