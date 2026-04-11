@@ -12,9 +12,8 @@ const NETWORK_PASSPHRASE = process.env.STELLAR_NETWORK === 'mainnet'
   : StellarSdk.Networks.TESTNET;
 
 const USDC_ISSUER = process.env.USDC_ISSUER;
-console.log('USDC_ISSUER:', JSON.stringify(USDC_ISSUER));
-if (!USDC_ISSUER) throw new Error('USDC_ISSUER env var is missing');
 const USDC = new StellarSdk.Asset('USDC', USDC_ISSUER);
+const horizon = new StellarSdk.Horizon.Server(HORIZON_URL);
 
 /**
  * Pay USDC on Stellar and return base64 proof for x402 header
@@ -51,14 +50,14 @@ export async function stellarPay(keypair, destination, amount, memo = 'x402') {
 /**
  * Make an x402-aware fetch — handles 402 → pay → retry automatically
  */
-export async function x402Fetch(url, keypair, agentName = 'agent') {
+export async function x402Fetch(url, keypair, agentName = 'agent', options = {}) {
   const headers = {
     'Content-Type': 'application/json',
     'x-agent-id': agentName,
   };
 
   // First attempt
-  let res = await fetch(url, { headers });
+  let res = await fetch(url, { ...options, headers });
 
   if (res.status !== 402) {
     if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
@@ -78,7 +77,7 @@ export async function x402Fetch(url, keypair, agentName = 'agent') {
   );
 
   // Retry with proof
-  res = await fetch(url, { headers: { ...headers, 'x-payment': proof } });
+  res = await fetch(url, { ...options, headers: { ...headers, 'x-payment': proof } });
   if (!res.ok) throw new Error(`Payment rejected: ${await res.text()}`);
   return res.json();
 }
