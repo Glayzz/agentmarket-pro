@@ -290,7 +290,8 @@ function connect(){
   ws=new WebSocket(WS);
   ws.onopen=()=>{document.getElementById('connLbl').textContent='Live';document.getElementById('connPill').className='pill live';};
   ws.onmessage=e=>handle(JSON.parse(e.data));
-  ws.onclose=()=>{document.getElementById('connLbl').textContent='Reconnecting';document.getElementById('connPill').className='pill';setTimeout(connect,3000);};
+  ws.onclose=()=>{document.getElementById('connLbl').textContent='Reconnecting';document.getElementById('connDot').className='dot red';setTimeout(connect,3000);}
+  ws.onerror=()=>ws.close();
 }
 const TAGS={payment_verified:'Verified',payment_required:'402',agent_working:'Working',transaction:'Transfer',query_received:'Query',orchestrator_thinking:'Thinking',report_ready:'Report',error:'Error'};
 const RCLS={payment_verified:'epv',payment_required:'epr',agent_working:'eaw',transaction:'etx',query_received:'eaw',orchestrator_thinking:'eaw',report_ready:'rep',error:'err'};
