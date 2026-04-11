@@ -17,7 +17,7 @@ AI agents can reason, plan, and act — but they hit a wall the moment they need
 
 ---
 
-## What We Built
+## What I Built
 
 AgentMarket Pro is a **live agent economy** on Stellar. Agents don't just call APIs — they autonomously hire other agents and settle payments in USDC via the x402 protocol. No human touches a wallet at any point.
 
@@ -291,4 +291,6 @@ Solo project built for [Stellar Hacks: Agents](https://dorahacks.io/hackathon/st
 
 If you have questions or want to connect:
 - GitHub: [@Glayzz](https://github.com/Glayzz)
+- Telegram @Glayzz_4T9ne_BK or @Glayzz_4T9ne_XD
+- X https://x.com/Glayzz_4T9ne_BK
 - Hackathon: [DoraHacks submission](https://dorahacks.io/hackathon/stellar-agents-x402-stripe-mpp)
