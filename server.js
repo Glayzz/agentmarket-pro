@@ -61,6 +61,8 @@ function recordTx(from, to, amount, service, txHash = null) {
 import yahooFinance from 'yahoo-finance2';
 
 async function stockData(ticker) {
+  const cryptoMap = {'BTC':'BTC-USD','ETH':'ETH-USD','SOL':'SOL-USD','BNB':'BNB-USD','XRP':'XRP-USD'};
+  ticker = cryptoMap[ticker.toUpperCase()] || ticker;
   const q = await yahooFinance.quote(ticker);
   return {
     ticker,
