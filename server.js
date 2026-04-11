@@ -147,9 +147,9 @@ app.post('/agent/code', x402Middleware(0.004, 'code-agent', agentWallets.code, b
   res.json({ ok: true, code, language: 'python' });
 });
 
-async function llm(messages, tools = null) {
-  const body = { model: process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free', max_tokens: 2048, messages };
-  if (tools) { body.tools = tools; body.tool_choice = 'auto'; }
+async function llm(messages, tools = null, forceTools = false) {
+  const body = { model: process.env.OPENROUTER_MODEL || 'google/gemini-3.1-flash-lite-preview', max_tokens: 2048, messages };
+  if (tools) { body.tools = tools; body.tool_choice = forceTools ? 'required' : 'auto'; }
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://agentmarket.dev', 'X-Title': 'AgentMarket' },
