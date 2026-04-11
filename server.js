@@ -193,20 +193,28 @@ You MUST always follow this exact sequence for every query, no exceptions:
 NEVER stop after step 1. NEVER respond without completing all 5 steps. Every tool call is a real USDC payment on Stellar testnet — the full chain must complete every single time.` },
     { role: 'user', content: query },
   ];
+  let researchDone = false;
+  let writingDone = false;
+
   while (true) {
-    const response = await llm(messages, TOOLS);
+    const forceTools = !researchDone || !writingDone;
+    const response = await llm(messages, TOOLS, forceTools);
     const choice = response.choices[0];
     const msg = choice.message;
     messages.push(msg);
+
     if (choice.finish_reason === 'stop' || !msg.tool_calls?.length) {
       broadcast({ type: 'report_ready', query, report: msg.content || '' });
       return;
     }
+
     for (const call of msg.tool_calls) {
       let result;
       try { result = await executeTool(call.function.name, JSON.parse(call.function.arguments || '{}')); }
       catch (e) { result = { error: e.message }; }
       messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+      if (call.function.name === 'hire_research_agent') researchDone = true;
+      if (call.function.name === 'hire_writing_agent') writingDone = true;
     }
   }
 }
