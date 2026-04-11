@@ -16,7 +16,7 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { x402Fetch } from './x402.js';
 import readline from 'readline';
 
-const BASE = `http://localhost:${process.env.PORT || 3001}`;
+const BASE = 'https://agentmarket-pro-production.up.railway.app';
 
 // Orchestrator's own Stellar keypair
 const ORC_KP = StellarSdk.Keypair.fromSecret(process.env.ORCHESTRATOR_SECRET);
