@@ -312,7 +312,7 @@ function addRow(ev){
   const desc=ev.service||ev.agent||ev.query||ev.task||ev.message||ev.type;
   const t=new Date(ev.ts||Date.now()).toTimeString().slice(0,8);
   const amtCls=ev.type==='transaction'?'p':ev.type==='payment_verified'?'g':'a';
-  const repBtn=ev.type==='report_ready'?`<button class="rep-btn" onclick="showReport(lastReport)">View</button>`:'';
+  const repBtn=ev.type==='report_ready'?`<button class="rep-btn" onclick="showReport(${JSON.stringify(ev.report||'')})">View</button>`:'';
   div.innerHTML=`<div class="fdot"></div><span class="ftag">${TAGS[ev.type]||ev.type}</span><span class="fdesc">${desc}</span><span class="ftime">${t}</span>${amt?`<span class="famt ${amtCls}">${amt}</span>`:''}${repBtn}`;
   document.getElementById('feedBody').prepend(div);
 }
