@@ -6,7 +6,7 @@
 **Built by [Glayzz](https://github.com/Glayzz)**
 
 🌐 **Live Demo:** [agent-market.netlify.app](https://agent-market.netlify.app)  
-📊 **Dashboard:** [agent-market.netlify.app/dashboard.html](https://agent-market.netlify.app/dashboard.html)  
+📊 **Dashboard:** [agent-market.netlify.app/dashboard.html](https://agent-market.netlify.app/app.html)  
 🔗 **Verify on-chain:** [Stellar Testnet Explorer](https://stellar.expert/explorer/testnet)
 
 ---
