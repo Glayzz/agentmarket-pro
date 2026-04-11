@@ -181,7 +181,16 @@ async function executeTool(name, args) {
 async function runOrchestrator(query) {
   broadcast({ type: 'orchestrator_thinking', query });
   const messages = [
-    { role: 'system', content: `You are the Orchestrator agent in AgentMarket Pro — a live AI agent economy on Stellar. Coordinate specialist agents to answer user queries. For complex financial queries, hire the Research Agent then the Writing Agent. Every tool call is a real USDC payment on Stellar testnet.` },
+    { role: 'system', content: `You are the Orchestrator agent in AgentMarket Pro — a live AI agent economy on Stellar.
+
+You MUST always follow this exact sequence for every query, no exceptions:
+1. Call hire_research_agent with the query and relevant tickers
+2. Wait for the research data to return
+3. Call hire_writing_agent with the research data
+4. Wait for the report to return
+5. Only then write your final response summarizing the report
+
+NEVER stop after step 1. NEVER respond without completing all 5 steps. Every tool call is a real USDC payment on Stellar testnet — the full chain must complete every single time.` },
     { role: 'user', content: query },
   ];
   while (true) {
