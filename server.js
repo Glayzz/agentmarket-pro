@@ -58,26 +58,46 @@ function recordTx(from, to, amount, service, txHash = null) {
   broadcast({ type: 'transaction', ...tx });
 }
 
-function stockData(ticker) {
-  const base = { NVDA: 875, AMD: 142, TSLA: 248, AAPL: 189, MSFT: 415, GOOGL: 178 };
-  const p = (base[ticker] || 100) + (Math.random() - 0.5) * 10;
-  const ch = (Math.random() - 0.5) * 10;
-  return { ticker, price: p.toFixed(2), change: ch.toFixed(2), changePct: ((ch/p)*100).toFixed(2), volume: Math.floor(Math.random()*50e6+10e6), pe: (Math.random()*40+15).toFixed(1), weekHigh: (p*1.35).toFixed(2), weekLow: (p*0.65).toFixed(2) };
+import yahooFinance from 'yahoo-finance2';
+
+async function stockData(ticker) {
+  const q = await yahooFinance.quote(ticker);
+  return {
+    ticker,
+    price: q.regularMarketPrice,
+    change: q.regularMarketChange?.toFixed(2),
+    changePct: q.regularMarketChangePercent?.toFixed(2),
+    volume: q.regularMarketVolume,
+    pe: q.trailingPE?.toFixed(1),
+    weekHigh: q.fiftyTwoWeekHigh,
+    weekLow: q.fiftyTwoWeekLow,
+  };
 }
 
-function newsData(q) {
-  const items = [
-    { title: `${q} beats Q1 earnings estimates by 12%`, sentiment: 'bullish', source: 'Reuters' },
-    { title: `Analysts raise ${q} price target on AI tailwinds`, sentiment: 'bullish', source: 'Bloomberg' },
-    { title: `${q} expands data center partnerships with hyperscalers`, sentiment: 'bullish', source: 'WSJ' },
-    { title: `Competition intensifies in ${q}'s core market`, sentiment: 'bearish', source: 'FT' },
-    { title: `Institutional inflows into ${q} up 8% in latest 13F`, sentiment: 'bullish', source: 'SEC' },
-  ];
-  return { query: q, articles: items.slice(0, 4), sentiment: (Math.random()*0.4+0.4).toFixed(2) };
+async function newsData(q) {
+  const results = await yahooFinance.search(q);
+  const articles = (results.news || []).slice(0, 4).map(n => ({
+    title: n.title,
+    source: n.publisher,
+    sentiment: 'neutral',
+  }));
+  return { query: q, articles, sentiment: '0.50' };
 }
 
-function macroData() {
-  return { fedRate: '5.25-5.50%', cpi: '3.2%', gdp: '2.8%', vix: (14+Math.random()*8).toFixed(2), dxy: (103+Math.random()*2).toFixed(2), treasury10y: (4.2+Math.random()*0.3).toFixed(2)+'%' };
+async function macroData() {
+  const [vix, dxy, treasury] = await Promise.all([
+    yahooFinance.quote('^VIX'),
+    yahooFinance.quote('DX-Y.NYB'),
+    yahooFinance.quote('^TNX'),
+  ]);
+  return {
+    fedRate: '5.25-5.50%',
+    cpi: '3.2%',
+    gdp: '2.8%',
+    vix: vix.regularMarketPrice?.toFixed(2),
+    dxy: dxy.regularMarketPrice?.toFixed(2),
+    treasury10y: treasury.regularMarketPrice?.toFixed(2) + '%',
+  };
 }
 
 function dataMiddleware(price, name) {
@@ -103,9 +123,9 @@ app.post('/agent/research', x402Middleware(0.005, 'research-agent', agentWallets
   const { query, stockTickers = [] } = req.body;
   recordTx('orchestrator', 'research', 0.005, 'research-agent', req.payment.txHash);
   broadcast({ type: 'agent_working', agent: 'research', task: query });
-  const stocks = stockTickers.map(t => stockData(t));
-  const news   = newsData(query);
-  const macro  = macroData();
+  const stocks = await Promise.all(stockTickers.map(t => stockData(t)));
+  const news = await newsData(query);
+  const macro = await macroData();
   res.json({ ok: true, data: { stocks, news, macro, query } });
 });
 
