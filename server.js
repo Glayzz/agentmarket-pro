@@ -26,7 +26,9 @@ const agentWallets = {
   code:     process.env.CODE_PUBLIC,
 };
 
-const BASE = `http://localhost:${process.env.PORT || 8080}`;
+const BASE = process.env.RAILWAY_PUBLIC_DOMAIN 
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
+  : `http://localhost:${process.env.PORT || 8080}`;
 
 const httpServer = http.createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
