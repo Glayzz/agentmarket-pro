@@ -10,8 +10,8 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { x402Middleware, x402Fetch } from './x402.js';
-import yahooFinance from 'yahoo-finance2';
-
+import YahooFinance from 'yahoo-finance2';
+const yahooFinance = new YahooFinance();
 const app = express();
 app.use(cors());
 app.use(express.json());
