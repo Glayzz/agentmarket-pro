@@ -11,7 +11,28 @@ import { WebSocketServer } from 'ws';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { x402Middleware, x402Fetch } from './x402.js';
 import YahooFinance from 'yahoo-finance2';
+
 const yahooFinance = new YahooFinance();
+
+let cryptoTickerMap = {};
+
+async function loadCryptoTickers() {
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/coins/list');
+    const coins = await res.json();
+    coins.forEach(coin => {
+      cryptoTickerMap[coin.symbol.toLowerCase()] = `${coin.symbol.toUpperCase()}-USD`;
+      cryptoTickerMap[coin.name.toLowerCase()] = `${coin.symbol.toUpperCase()}-USD`;
+    });
+    console.log(`Loaded ${coins.length} crypto tickers`);
+  } catch(e) {
+    console.error('Failed to load crypto tickers:', e.message);
+  }
+}
+
+loadCryptoTickers();
+setInterval(loadCryptoTickers, 1000 * 60 * 60 * 24);
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -60,8 +81,6 @@ function recordTx(from, to, amount, service, txHash = null) {
 }
 
 async function stockData(ticker) {
-  const cryptoMap = {'BTC':'BTC-USD','ETH':'ETH-USD','SOL':'SOL-USD','BNB':'BNB-USD','XRP':'XRP-USD'};
-  ticker = cryptoMap[ticker.toUpperCase()] || ticker;
   const q = await yahooFinance.quote(ticker);
   return {
     ticker,
@@ -166,10 +185,53 @@ async function llm(messages) {
   return res.json();
 }
 
-function isFinancialQuery(query) {
-  const keywords = ['stock','price','market','compare','ticker','invest','crypto','bitcoin','eth','nvda','amd','tsla','aapl','msft','earnings','revenue','pe ratio','buy','sell','portfolio','fund','etf','nasdaq','s&p','dow','forex','usdc','financial','report','analysis'];
+function extractTickers(query) {
+  // Match explicit $TICKER format
+  const dollarTickers = [...query.matchAll(/\$([A-Z]{1,5})/g)].map(m => m[1]);
+
+  // Known stock name → ticker map
+  const nameMap = {
+    'nvidia':'NVDA','apple':'AAPL','microsoft':'MSFT','google':'GOOGL','alphabet':'GOOGL',
+    'amazon':'AMZN','tesla':'TSLA','meta':'META','facebook':'META','netflix':'NFLX',
+    'amd':'AMD','intel':'INTC','qualcomm':'QCOM','broadcom':'AVGO','arm':'ARM',
+    'shopify':'SHOP','uber':'UBER','lyft':'LYFT','airbnb':'ABNB','spotify':'SPOT',
+    'paypal':'PYPL','visa':'V','mastercard':'MA','jpmorgan':'JPM','goldman':'GS',
+    'bank of america':'BAC','wells fargo':'WFC','berkshire':'BRK-B',
+    'johnson':'JNJ','pfizer':'PFE','moderna':'MRNA','abbvie':'ABBV',
+    'exxon':'XOM','chevron':'CVX','shell':'SHEL','bp':'BP',
+    'walmart':'WMT','target':'TGT','costco':'COST','nike':'NKE',
+    'disney':'DIS','warner':'WBD','comcast':'CMCSA',
+    'palantir':'PLTR','snowflake':'SNOW','datadog':'DDOG','cloudflare':'NET',
+    'coinbase':'COIN','robinhood':'HOOD','block':'SQ','square':'SQ',
+    'samsung':'005930.KS','toyota':'TM','alibaba':'BABA','tencent':'TCEHY',
+  };
+
   const lower = query.toLowerCase();
-  return keywords.some(k => lower.includes(k));
+
+  // Match stock names
+  const nameTickers = Object.entries(nameMap)
+    .filter(([name]) => lower.includes(name))
+    .map(([, ticker]) => ticker);
+
+  // Match from dynamic CoinGecko crypto map
+  const cryptoTickers = Object.entries(cryptoTickerMap)
+    .filter(([name]) => name.length > 2 && lower.includes(name))
+    .map(([, ticker]) => ticker);
+
+  // Match uppercase words 2-5 chars that look like tickers
+  const skipWords = new Set(['AND','THE','FOR','WITH','FROM','THAT','THIS','WILL','WHAT','WHEN','THEN','THAN','YOUR','HAVE','BEEN','THEY','WERE','SAID','EACH','WHICH','THEIR','THERE','ABOUT','WOULD','COULD','SHOULD','WRITE','SMALL','HELLO','WORLD','CODE','HTML']);
+  const upperTickers = [...query.matchAll(/\b([A-Z]{2,5})\b/g)]
+    .map(m => m[1])
+    .filter(t => !skipWords.has(t));
+
+  return [...new Set([...dollarTickers, ...nameTickers, ...cryptoTickers, ...upperTickers])];
+}
+
+function isFinancialQuery(query) {
+  const keywords = ['stock','price','market','compare','ticker','invest','crypto','bitcoin','coin','token','eth','nvda','amd','tsla','aapl','msft','earnings','revenue','pe ratio','buy','sell','portfolio','fund','etf','nasdaq','s&p','dow','forex','usdc','financial','report','analysis','trading','chart','doge','pepe','shib'];
+  const lower = query.toLowerCase();
+  const hasCrypto = Object.keys(cryptoTickerMap).some(name => name.length > 2 && lower.includes(name));
+  return keywords.some(k => lower.includes(k)) || hasCrypto;
 }
 
 async function runOrchestrator(query) {
@@ -177,7 +239,6 @@ async function runOrchestrator(query) {
 
   try {
     if (isFinancialQuery(query)) {
-      // Full agent chain for financial queries
       broadcast({ type: 'agent_working', agent: 'research', task: query });
       const tickers = extractTickers(query);
       const researchResult = await x402Fetch(
@@ -209,7 +270,6 @@ async function runOrchestrator(query) {
       broadcast({ type: 'report_ready', query, report });
 
     } else {
-      // Direct LLM response for general questions
       const response = await llm([
         { role: 'system', content: 'You are a helpful AI assistant called AgentMarket. Answer clearly and concisely.' },
         { role: 'user', content: query }
