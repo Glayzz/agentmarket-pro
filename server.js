@@ -10,6 +10,7 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { x402Middleware, x402Fetch } from './x402.js';
+import yahooFinance from 'yahoo-finance2';
 
 const app = express();
 app.use(cors());
@@ -26,8 +27,8 @@ const agentWallets = {
   code:     process.env.CODE_PUBLIC,
 };
 
-const BASE = process.env.RAILWAY_PUBLIC_DOMAIN 
-  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
+const BASE = process.env.RAILWAY_PUBLIC_DOMAIN
+  ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
   : `http://localhost:${process.env.PORT || 8080}`;
 
 const httpServer = http.createServer(app);
@@ -57,8 +58,6 @@ function recordTx(from, to, amount, service, txHash = null) {
   ledger.agentBalances[to]   = (ledger.agentBalances[to]   || 0) + amount;
   broadcast({ type: 'transaction', ...tx });
 }
-
-import yahooFinance from 'yahoo-finance2';
 
 async function stockData(ticker) {
   const cryptoMap = {'BTC':'BTC-USD','ETH':'ETH-USD','SOL':'SOL-USD','BNB':'BNB-USD','XRP':'XRP-USD'};
@@ -106,19 +105,19 @@ function dataMiddleware(price, name) {
   return x402Middleware(price, name, SERVER_PUB, broadcast);
 }
 
-app.get('/data/stock/:ticker', dataMiddleware(0.001, 'stock-data'), (req, res) => {
+app.get('/data/stock/:ticker', dataMiddleware(0.001, 'stock-data'), async (req, res) => {
   recordTx(req.payment.sender.slice(0,8), 'server', 0.001, 'stock-data', req.payment.txHash);
-  res.json({ ok: true, data: stockData(req.params.ticker.toUpperCase()) });
+  res.json({ ok: true, data: await stockData(req.params.ticker.toUpperCase()) });
 });
 
-app.get('/data/news', dataMiddleware(0.001, 'news-feed'), (req, res) => {
+app.get('/data/news', dataMiddleware(0.001, 'news-feed'), async (req, res) => {
   recordTx(req.payment.sender.slice(0,8), 'server', 0.001, 'news-feed', req.payment.txHash);
-  res.json({ ok: true, data: newsData(req.query.q || 'market') });
+  res.json({ ok: true, data: await newsData(req.query.q || 'market') });
 });
 
-app.get('/data/macro', dataMiddleware(0.002, 'macro-data'), (req, res) => {
+app.get('/data/macro', dataMiddleware(0.002, 'macro-data'), async (req, res) => {
   recordTx(req.payment.sender.slice(0,8), 'server', 0.002, 'macro-data', req.payment.txHash);
-  res.json({ ok: true, data: macroData() });
+  res.json({ ok: true, data: await macroData() });
 });
 
 app.post('/agent/research', x402Middleware(0.005, 'research-agent', agentWallets.research, broadcast), async (req, res) => {
@@ -148,18 +147,18 @@ app.post('/agent/code', x402Middleware(0.004, 'code-agent', agentWallets.code, b
 });
 
 async function llm(messages) {
-  const body = { 
-    model: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free', 
-    max_tokens: 2048, 
-    messages 
+  const body = {
+    model: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free',
+    max_tokens: 2048,
+    messages
   };
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
-    headers: { 
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 
-      'Content-Type': 'application/json', 
-      'HTTP-Referer': 'https://agentmarket.dev', 
-      'X-Title': 'AgentMarket' 
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://agentmarket.dev',
+      'X-Title': 'AgentMarket'
     },
     body: JSON.stringify(body),
   });
@@ -173,7 +172,6 @@ function extractTickers(query) {
   return known.filter(t => upper.includes(t));
 }
 
-// Hardcoded chain — no LLM tool-calling loop, always runs Research → Writing → Report
 async function runOrchestrator(query) {
   broadcast({ type: 'orchestrator_thinking', query });
 
@@ -182,9 +180,9 @@ async function runOrchestrator(query) {
     broadcast({ type: 'agent_working', agent: 'research', task: query });
     const tickers = extractTickers(query);
     const researchResult = await x402Fetch(
-      `${BASE}/agent/research`, 
-      ORC_KP, 
-      'orchestrator', 
+      `${BASE}/agent/research`,
+      ORC_KP,
+      'orchestrator',
       { method: 'POST', body: JSON.stringify({ query, stockTickers: tickers }) }
     );
 
@@ -192,22 +190,26 @@ async function runOrchestrator(query) {
 
     // Step 2: Pay Writing Agent with the research data
     broadcast({ type: 'agent_working', agent: 'writing', task: 'Polishing report...' });
-    await x402Fetch(
-      `${BASE}/agent/writing`, 
-      RESEARCH_KP, 
-      'research-agent', 
-      { method: 'POST', body: JSON.stringify({ rawData: researchData, style: 'professional' }) }
-    );
+    try {
+      await x402Fetch(
+        `${BASE}/agent/writing`,
+        RESEARCH_KP,
+        'research-agent',
+        { method: 'POST', body: JSON.stringify({ rawData: researchData, style: 'professional' }) }
+      );
+    } catch(e) {
+      broadcast({ type: 'error', message: `Writing agent failed: ${e.message}` });
+    }
 
-    // Step 3: LLM writes the final report from the collected data
+    // Step 3: LLM writes the final report
     const response = await llm([
-      { 
-        role: 'system', 
-        content: 'You are a professional financial analyst. Write a detailed, well-structured research report. Include: executive summary, stock analysis with key metrics, news sentiment analysis, macroeconomic context, and investment outlook. Be specific and data-driven.' 
+      {
+        role: 'system',
+        content: 'You are a professional financial analyst. Write a detailed, well-structured research report. Include: executive summary, stock analysis with key metrics, news sentiment analysis, macroeconomic context, and investment outlook. Be specific and data-driven.'
       },
-      { 
-        role: 'user', 
-        content: `Write a comprehensive research report for: "${query}"\n\nData collected:\n${JSON.stringify(researchData, null, 2)}` 
+      {
+        role: 'user',
+        content: `Write a comprehensive research report for: "${query}"\n\nData collected:\n${JSON.stringify(researchData, null, 2)}`
       }
     ]);
 
