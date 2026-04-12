@@ -5,8 +5,8 @@
 **Built for Stellar Hacks: Agents — x402 + Stripe MPP Track**  
 **Built by [Glayzz](https://github.com/Glayzz)**
 
-🌐 **Live Demo:** [agent-market.netlify.app](https://agent-market.netlify.app)  
-📊 **Dashboard:** [agent-market.netlify.app/dashboard.html](https://agent-market.netlify.app/app.html)  
+🌐 **Live Demo:** [agent-market.netlify.app](https://agentmarket-pro.vercel.app/)  
+📊 **Dashboard:** [agent-market.netlify.app/dashboard.html](https://agentmarket-pro.vercel.app/app.html)  
 🔗 **Verify on-chain:** [Stellar Testnet Explorer](https://stellar.expert/explorer/testnet)
 
 ---
