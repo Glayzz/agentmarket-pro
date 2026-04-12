@@ -262,7 +262,7 @@ async function runOrchestrator(query) {
       }
 
       const response = await llm([
-        { role: 'system', content: 'You are a professional financial analyst. Write a detailed, well-structured research report. Include: executive summary, stock analysis with key metrics, news sentiment analysis, macroeconomic context, and investment outlook. Be specific and data-driven.' },
+        { role: 'system', content: `You are a professional financial analyst. Today's date is ${new Date().toLocaleDateString('en-US', {year:'numeric',month:'long',day:'numeric'})}. Write a detailed, well-structured research report using the exact data provided. Do not invent or assume any figures — only use the data given. Include: executive summary, stock analysis with key metrics, news sentiment analysis, macroeconomic context, and investment outlook.` },
         { role: 'user', content: `Write a comprehensive research report for: "${query}"\n\nData collected:\n${JSON.stringify(researchData, null, 2)}` }
       ]);
 
