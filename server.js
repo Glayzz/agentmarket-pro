@@ -147,9 +147,9 @@ app.post('/agent/code', x402Middleware(0.004, 'code-agent', agentWallets.code, b
   res.json({ ok: true, code, language: 'python' });
 });
 
-async function llm(messages, tools = null, forceTools = false) {
-  const body = { model: process.env.OPENROUTER_MODEL || 'google/gemini-3.1-flash-lite-preview', max_tokens: 2048, messages };
-  if (tools) { body.tools = tools; body.tool_choice = forceTools ? 'required' : 'auto'; }
+async function llm(messages, tools = null) {
+  const body = { model: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free', max_tokens: 2048, messages };
+  if (tools) { body.tools = tools; body.tool_choice = 'auto'; }
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://agentmarket.dev', 'X-Title': 'AgentMarket' },
@@ -186,30 +186,25 @@ function extractTickers(query) {
 
 async function runOrchestrator(query) {
   broadcast({ type: 'orchestrator_thinking', query });
-
-  try {
-    // Step 1 — always hire research agent
-    broadcast({ type: 'agent_working', agent: 'orchestrator', task: query });
-    const tickers = extractTickers(query);
-    const researchResult = await executeTool('hire_research_agent', { query, tickers });
-
-    // Step 2 — always hire writing agent with research data
-    const writingResult = await executeTool('hire_writing_agent', { 
-      rawData: researchResult?.data || researchResult, 
-      style: 'professional' 
-    });
-
-    // Step 3 — use LLM to write final report from the data
-    const response = await llm([
-      { role: 'system', content: 'You are a financial analyst. Write a detailed, professional research report based on the data provided. Include stock analysis, news sentiment, macro context, and outlook.' },
-      { role: 'user', content: `Write a full report for: "${query}"\n\nResearch data: ${JSON.stringify(researchResult?.data || researchResult)}` }
-    ]);
-
-    const report = response.choices[0].message.content || '';
-    broadcast({ type: 'report_ready', query, report });
-
-  } catch (e) {
-    broadcast({ type: 'error', message: e.message });
+  const messages = [
+    { role: 'system', content: `You are the Orchestrator agent in AgentMarket Pro — a live AI agent economy on Stellar. Coordinate specialist agents to answer user queries. For complex financial queries, hire the Research Agent then the Writing Agent. Every tool call is a real USDC payment on Stellar testnet.` },
+    { role: 'user', content: query },
+  ];
+  while (true) {
+    const response = await llm(messages, TOOLS);
+    const choice = response.choices[0];
+    const msg = choice.message;
+    messages.push(msg);
+    if (choice.finish_reason === 'stop' || !msg.tool_calls?.length) {
+      broadcast({ type: 'report_ready', query, report: msg.content || '' });
+      return;
+    }
+    for (const call of msg.tool_calls) {
+      let result;
+      try { result = await executeTool(call.function.name, JSON.parse(call.function.arguments || '{}')); }
+      catch (e) { result = { error: e.message }; }
+      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+    }
   }
 }
 
