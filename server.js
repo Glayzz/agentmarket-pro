@@ -178,44 +178,38 @@ async function executeTool(name, args) {
   }
 }
 
+function extractTickers(query) {
+  const known = ['NVDA','AMD','TSLA','AAPL','MSFT','GOOGL','META','AMZN','BTC','ETH'];
+  const upper = query.toUpperCase();
+  return known.filter(t => upper.includes(t));
+}
+
 async function runOrchestrator(query) {
   broadcast({ type: 'orchestrator_thinking', query });
-  const messages = [
-    { role: 'system', content: `You are the Orchestrator agent in AgentMarket Pro — a live AI agent economy on Stellar.
 
-You MUST always follow this exact sequence for every query, no exceptions:
-1. Call hire_research_agent with the query and relevant tickers
-2. Wait for the research data to return
-3. Call hire_writing_agent with the research data
-4. Wait for the report to return
-5. Only then write your final response summarizing the report
+  try {
+    // Step 1 — always hire research agent
+    broadcast({ type: 'agent_working', agent: 'orchestrator', task: query });
+    const tickers = extractTickers(query);
+    const researchResult = await executeTool('hire_research_agent', { query, tickers });
 
-NEVER stop after step 1. NEVER respond without completing all 5 steps. Every tool call is a real USDC payment on Stellar testnet — the full chain must complete every single time.` },
-    { role: 'user', content: query },
-  ];
-  let researchDone = false;
-  let writingDone = false;
+    // Step 2 — always hire writing agent with research data
+    const writingResult = await executeTool('hire_writing_agent', { 
+      rawData: researchResult?.data || researchResult, 
+      style: 'professional' 
+    });
 
-  while (true) {
-    const forceTools = !researchDone || !writingDone;
-    const response = await llm(messages, TOOLS, forceTools);
-    const choice = response.choices[0];
-    const msg = choice.message;
-    messages.push(msg);
+    // Step 3 — use LLM to write final report from the data
+    const response = await llm([
+      { role: 'system', content: 'You are a financial analyst. Write a detailed, professional research report based on the data provided. Include stock analysis, news sentiment, macro context, and outlook.' },
+      { role: 'user', content: `Write a full report for: "${query}"\n\nResearch data: ${JSON.stringify(researchResult?.data || researchResult)}` }
+    ]);
 
-    if (choice.finish_reason === 'stop' || !msg.tool_calls?.length) {
-      broadcast({ type: 'report_ready', query, report: msg.content || '' });
-      return;
-    }
+    const report = response.choices[0].message.content || '';
+    broadcast({ type: 'report_ready', query, report });
 
-    for (const call of msg.tool_calls) {
-      let result;
-      try { result = await executeTool(call.function.name, JSON.parse(call.function.arguments || '{}')); }
-      catch (e) { result = { error: e.message }; }
-      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
-      if (call.function.name === 'hire_research_agent') researchDone = true;
-      if (call.function.name === 'hire_writing_agent') writingDone = true;
-    }
+  } catch (e) {
+    broadcast({ type: 'error', message: e.message });
   }
 }
 
