@@ -166,55 +166,57 @@ async function llm(messages) {
   return res.json();
 }
 
-function extractTickers(query) {
-  const known = ['NVDA','AMD','TSLA','AAPL','MSFT','GOOGL','META','AMZN','BTC','ETH','SOL'];
-  const upper = query.toUpperCase();
-  return known.filter(t => upper.includes(t));
+function isFinancialQuery(query) {
+  const keywords = ['stock','price','market','compare','ticker','invest','crypto','bitcoin','eth','nvda','amd','tsla','aapl','msft','earnings','revenue','pe ratio','buy','sell','portfolio','fund','etf','nasdaq','s&p','dow','forex','usdc','financial','report','analysis'];
+  const lower = query.toLowerCase();
+  return keywords.some(k => lower.includes(k));
 }
 
 async function runOrchestrator(query) {
   broadcast({ type: 'orchestrator_thinking', query });
 
   try {
-    // Step 1: Pay Research Agent and get data
-    broadcast({ type: 'agent_working', agent: 'research', task: query });
-    const tickers = extractTickers(query);
-    const researchResult = await x402Fetch(
-      `${BASE}/agent/research`,
-      ORC_KP,
-      'orchestrator',
-      { method: 'POST', body: JSON.stringify({ query, stockTickers: tickers }) }
-    );
-
-    const researchData = researchResult?.data || researchResult;
-
-    // Step 2: Pay Writing Agent with the research data
-    broadcast({ type: 'agent_working', agent: 'writing', task: 'Polishing report...' });
-    try {
-      await x402Fetch(
-        `${BASE}/agent/writing`,
-        RESEARCH_KP,
-        'research-agent',
-        { method: 'POST', body: JSON.stringify({ rawData: researchData, style: 'professional' }) }
+    if (isFinancialQuery(query)) {
+      // Full agent chain for financial queries
+      broadcast({ type: 'agent_working', agent: 'research', task: query });
+      const tickers = extractTickers(query);
+      const researchResult = await x402Fetch(
+        `${BASE}/agent/research`,
+        ORC_KP,
+        'orchestrator',
+        { method: 'POST', body: JSON.stringify({ query, stockTickers: tickers }) }
       );
-    } catch(e) {
-      broadcast({ type: 'error', message: `Writing agent failed: ${e.message}` });
-    }
+      const researchData = researchResult?.data || researchResult;
 
-    // Step 3: LLM writes the final report
-    const response = await llm([
-      {
-        role: 'system',
-        content: 'You are a professional financial analyst. Write a detailed, well-structured research report. Include: executive summary, stock analysis with key metrics, news sentiment analysis, macroeconomic context, and investment outlook. Be specific and data-driven.'
-      },
-      {
-        role: 'user',
-        content: `Write a comprehensive research report for: "${query}"\n\nData collected:\n${JSON.stringify(researchData, null, 2)}`
+      broadcast({ type: 'agent_working', agent: 'writing', task: 'Polishing report...' });
+      try {
+        await x402Fetch(
+          `${BASE}/agent/writing`,
+          RESEARCH_KP,
+          'research-agent',
+          { method: 'POST', body: JSON.stringify({ rawData: researchData, style: 'professional' }) }
+        );
+      } catch(e) {
+        broadcast({ type: 'error', message: `Writing agent failed: ${e.message}` });
       }
-    ]);
 
-    const report = response.choices[0].message.content || 'Report generation failed.';
-    broadcast({ type: 'report_ready', query, report });
+      const response = await llm([
+        { role: 'system', content: 'You are a professional financial analyst. Write a detailed, well-structured research report. Include: executive summary, stock analysis with key metrics, news sentiment analysis, macroeconomic context, and investment outlook. Be specific and data-driven.' },
+        { role: 'user', content: `Write a comprehensive research report for: "${query}"\n\nData collected:\n${JSON.stringify(researchData, null, 2)}` }
+      ]);
+
+      const report = response.choices[0].message.content || 'Report generation failed.';
+      broadcast({ type: 'report_ready', query, report });
+
+    } else {
+      // Direct LLM response for general questions
+      const response = await llm([
+        { role: 'system', content: 'You are a helpful AI assistant called AgentMarket. Answer clearly and concisely.' },
+        { role: 'user', content: query }
+      ]);
+      const report = response.choices[0].message.content || 'No response generated.';
+      broadcast({ type: 'report_ready', query, report });
+    }
 
   } catch (e) {
     console.error('Orchestrator error:', e.message);
