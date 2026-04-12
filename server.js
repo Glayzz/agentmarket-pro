@@ -147,64 +147,76 @@ app.post('/agent/code', x402Middleware(0.004, 'code-agent', agentWallets.code, b
   res.json({ ok: true, code, language: 'python' });
 });
 
-async function llm(messages, tools = null) {
-  const body = { model: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free', max_tokens: 2048, messages };
-  if (tools) { body.tools = tools; body.tool_choice = 'auto'; }
+async function llm(messages) {
+  const body = { 
+    model: process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free', 
+    max_tokens: 2048, 
+    messages 
+  };
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://agentmarket.dev', 'X-Title': 'AgentMarket' },
+    headers: { 
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`, 
+      'Content-Type': 'application/json', 
+      'HTTP-Referer': 'https://agentmarket.dev', 
+      'X-Title': 'AgentMarket' 
+    },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`LLM error: ${await res.text()}`);
   return res.json();
 }
 
-const TOOLS = [
-  { type: 'function', function: { name: 'hire_research_agent', description: 'Hire Research Agent. Costs 0.005 USDC.', parameters: { type: 'object', properties: { query: { type: 'string' }, tickers: { type: 'array', items: { type: 'string' } } }, required: ['query','tickers'] } } },
-  { type: 'function', function: { name: 'hire_writing_agent', description: 'Hire Writing Agent. Costs 0.003 USDC.', parameters: { type: 'object', properties: { rawData: { type: 'object' }, style: { type: 'string', enum: ['professional','concise','detailed'] } }, required: ['rawData'] } } },
-  { type: 'function', function: { name: 'buy_stock_data', description: 'Buy stock data. Costs 0.001 USDC.', parameters: { type: 'object', properties: { ticker: { type: 'string' } }, required: ['ticker'] } } },
-  { type: 'function', function: { name: 'buy_news_data', description: 'Buy news data. Costs 0.001 USDC.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
-  { type: 'function', function: { name: 'buy_macro_data', description: 'Buy macro data. Costs 0.002 USDC.', parameters: { type: 'object', properties: {} } } },
-];
-
-async function executeTool(name, args) {
-  switch (name) {
-    case 'hire_research_agent': return x402Fetch(`${BASE}/agent/research`, ORC_KP, 'orchestrator', { method: 'POST', body: JSON.stringify({ query: args.query, stockTickers: args.tickers }) });
-    case 'hire_writing_agent': return x402Fetch(`${BASE}/agent/writing`, RESEARCH_KP, 'research-agent', { method: 'POST', body: JSON.stringify({ rawData: args.rawData, style: args.style || 'professional' }) });
-    case 'buy_stock_data': return x402Fetch(`${BASE}/data/stock/${args.ticker}`, RESEARCH_KP, 'research-agent');
-    case 'buy_news_data': return x402Fetch(`${BASE}/data/news?q=${encodeURIComponent(args.query)}`, RESEARCH_KP, 'research-agent');
-    case 'buy_macro_data': return x402Fetch(`${BASE}/data/macro`, RESEARCH_KP, 'research-agent');
-    default: return { error: `Unknown tool: ${name}` };
-  }
-}
-
 function extractTickers(query) {
-  const known = ['NVDA','AMD','TSLA','AAPL','MSFT','GOOGL','META','AMZN','BTC','ETH'];
+  const known = ['NVDA','AMD','TSLA','AAPL','MSFT','GOOGL','META','AMZN','BTC','ETH','SOL'];
   const upper = query.toUpperCase();
   return known.filter(t => upper.includes(t));
 }
 
+// Hardcoded chain — no LLM tool-calling loop, always runs Research → Writing → Report
 async function runOrchestrator(query) {
   broadcast({ type: 'orchestrator_thinking', query });
-  const messages = [
-    { role: 'system', content: `You are the Orchestrator agent in AgentMarket Pro — a live AI agent economy on Stellar. Coordinate specialist agents to answer user queries. For complex financial queries, hire the Research Agent then the Writing Agent. Every tool call is a real USDC payment on Stellar testnet.` },
-    { role: 'user', content: query },
-  ];
-  while (true) {
-    const response = await llm(messages, TOOLS);
-    const choice = response.choices[0];
-    const msg = choice.message;
-    messages.push(msg);
-    if (choice.finish_reason === 'stop' || !msg.tool_calls?.length) {
-      broadcast({ type: 'report_ready', query, report: msg.content || '' });
-      return;
-    }
-    for (const call of msg.tool_calls) {
-      let result;
-      try { result = await executeTool(call.function.name, JSON.parse(call.function.arguments || '{}')); }
-      catch (e) { result = { error: e.message }; }
-      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
-    }
+
+  try {
+    // Step 1: Pay Research Agent and get data
+    broadcast({ type: 'agent_working', agent: 'research', task: query });
+    const tickers = extractTickers(query);
+    const researchResult = await x402Fetch(
+      `${BASE}/agent/research`, 
+      ORC_KP, 
+      'orchestrator', 
+      { method: 'POST', body: JSON.stringify({ query, stockTickers: tickers }) }
+    );
+
+    const researchData = researchResult?.data || researchResult;
+
+    // Step 2: Pay Writing Agent with the research data
+    broadcast({ type: 'agent_working', agent: 'writing', task: 'Polishing report...' });
+    await x402Fetch(
+      `${BASE}/agent/writing`, 
+      RESEARCH_KP, 
+      'research-agent', 
+      { method: 'POST', body: JSON.stringify({ rawData: researchData, style: 'professional' }) }
+    );
+
+    // Step 3: LLM writes the final report from the collected data
+    const response = await llm([
+      { 
+        role: 'system', 
+        content: 'You are a professional financial analyst. Write a detailed, well-structured research report. Include: executive summary, stock analysis with key metrics, news sentiment analysis, macroeconomic context, and investment outlook. Be specific and data-driven.' 
+      },
+      { 
+        role: 'user', 
+        content: `Write a comprehensive research report for: "${query}"\n\nData collected:\n${JSON.stringify(researchData, null, 2)}` 
+      }
+    ]);
+
+    const report = response.choices[0].message.content || 'Report generation failed.';
+    broadcast({ type: 'report_ready', query, report });
+
+  } catch (e) {
+    console.error('Orchestrator error:', e.message);
+    broadcast({ type: 'error', message: e.message });
   }
 }
 
